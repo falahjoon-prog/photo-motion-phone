@@ -89,7 +89,7 @@ const MOTION={
 const FAL_MODEL="kling/v4/image-to-video";
 const ease=t=>t*t*(3-2*t);
 const zoomAmt=()=>Math.min(2,Math.max(.05,(+$("zoom").value||80)/100));
-function mot(style){const a=zoomAmt();return style==="Zoom In"?[1,1+a,.5,.5,0,0]:style==="Zoom Out"?[1+a,1,.5,.5,0,0]:style==="Pan Left"?[1+Math.max(a,.3),1+Math.max(a,.3),1,0,0,0]:style==="Pan Right"?[1+Math.max(a,.3),1+Math.max(a,.3),0,1,0,0]:MOTION[style]}
+function mot(style){const a=zoomAmt();return style==="Zoom In"?[1,1+a,.5,.5,0,0]:style==="Zoom Out"?[1+a,1,.5,.5,0,0]:style==="Pan Left"?[1+Math.min(Math.max(a,.15),.3),1+Math.min(Math.max(a,.15),.3),1,0,0,0]:style==="Pan Right"?[1+Math.min(Math.max(a,.15),.3),1+Math.min(Math.max(a,.15),.3),0,1,0,0]:MOTION[style]}
 let items=[],sel=-1,uid=0,runId=null,busy=false;
 
 /* ---------- storage ---------- */
