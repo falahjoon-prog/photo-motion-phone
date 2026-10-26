@@ -4,14 +4,16 @@ import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.ImageDecoder;
+import android.provider.OpenableColumns;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
-import android.webkit.ValueCallback;
-import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.Toast;
@@ -26,7 +28,6 @@ import java.io.ByteArrayOutputStream;
 
 public class MainActivity extends Activity {
     private WebView web;
-    private ValueCallback<Uri[]> chooser;
     private Uri saveUri;
     private OutputStream saveOut;
 
@@ -41,33 +42,47 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         web.addJavascriptInterface(new Bridge(), "Native");
-        web.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
-                if (chooser != null) chooser.onReceiveValue(null);
-                chooser = cb;
-                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
-                i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("image/*");
-                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-                try {
-                    startActivityForResult(i, 1);
-                } catch (Exception e) {
-                    chooser = null;
-                    return false;
-                }
-                return true;
-            }
-        });
         web.loadUrl("file:///android_asset/index.html");
     }
 
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
-        if (req == 1 && chooser != null) {
-            chooser.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
-            chooser = null;
+        if (req != 2) return;
+        final java.util.List<Uri> uris = new java.util.ArrayList<>();
+        if (res == RESULT_OK && data != null) {
+            if (data.getClipData() != null) {
+                for (int k = 0; k < data.getClipData().getItemCount(); k++) uris.add(data.getClipData().getItemAt(k).getUri());
+            } else if (data.getData() != null) uris.add(data.getData());
         }
+        new Thread(() -> {
+            String err = "";
+            int ok = 0;
+            for (Uri u : uris) {
+                try {
+                    Bitmap bmp = ImageDecoder.decodeBitmap(ImageDecoder.createSource(getContentResolver(), u), (d, info, src) -> {
+                        int w = info.getSize().getWidth(), h = info.getSize().getHeight();
+                        float k = Math.min(1f, 1600f / Math.max(w, h));
+                        d.setTargetSize(Math.max(2, Math.round(w * k)), Math.max(2, Math.round(h * k)));
+                        d.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
+                    });
+                    ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 90, bo);
+                    js("window.__photo(" + JSONObject.quote(nameOf(u)) + ",'" + Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP) + "')");
+                    ok++;
+                } catch (Throwable e) {
+                    err = String.valueOf(e.getMessage());
+                }
+            }
+            js("window.__photosDone(" + ok + "," + uris.size() + "," + JSONObject.quote(err) + ")");
+        }).start();
+    }
+
+    private String nameOf(Uri u) {
+        try (Cursor c = getContentResolver().query(u, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (c != null && c.moveToFirst()) return c.getString(0);
+        } catch (Exception ignored) {
+        }
+        return "photo";
     }
 
     @Override
@@ -82,6 +97,21 @@ public class MainActivity extends Activity {
     }
 
     class Bridge {
+        @JavascriptInterface
+        public void pickPhotos() {
+            runOnUiThread(() -> {
+                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("image/*");
+                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                try {
+                    startActivityForResult(Intent.createChooser(i, "Choose photos"), 2);
+                } catch (Exception e) {
+                    js("window.__photosDone(0,0," + JSONObject.quote("Could not open the photo picker: " + e.getMessage()) + ")");
+                }
+            });
+        }
+
         @JavascriptInterface
         public void request(final String id, final String method, final String url, final String headers, final String body) {
             new Thread(() -> {

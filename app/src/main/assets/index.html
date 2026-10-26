@@ -368,7 +368,10 @@ Object.keys(SIZES).forEach(s=>$("size").add(new Option(s)));
 for(const k of["size","fade","fps"]){const v=store.get(k,null);if(v!==null)$(k).value=v;$(k).onchange=()=>{store.set(k,$(k).value);if(k==="size")showFirst()}}
 $("fit").checked=store.get("fit","1")==="1";$("fit").onchange=()=>{store.set("fit",$("fit").checked?"1":"0");showFirst()};
 $("style").value="Zoom In";
-$("bAdd").onclick=()=>$("file").click();
+$("bAdd").onclick=()=>{if(HAS){say("Opening photo picker...");Native.pickPhotos()}else $("file").click()};
+const got=[];
+window.__photo=(name,b)=>{const u=Uint8Array.from(atob(b),c=>c.charCodeAt(0));got.push(new File([u],name,{type:"image/jpeg"}))};
+window.__photosDone=async(ok,total,err)=>{const f=got.splice(0);if(f.length)await addFiles(f);else say(total?("Could not read the photo: "+err):(err||"No photo was chosen."),!!(total||err))};
 $("file").onchange=async()=>{const f=[...$("file").files];if(!f.length)return say("No photo was received from the picker.",true);await addFiles(f);$("file").value=""};
 $("bDel").onclick=removeSel;$("bUp").onclick=()=>move(-1);$("bDown").onclick=()=>move(1);
 $("bPlay").onclick=preview;$("bStop").onclick=()=>{stop();showFirst()};
