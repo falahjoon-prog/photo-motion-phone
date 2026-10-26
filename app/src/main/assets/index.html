@@ -55,7 +55,8 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 <h3>VIDEO</h3>
 <div class="row"><div class="col"><label>Size</label><select id="size"></select></div></div>
 <div class="row"><div class="col"><label>Fade (s)</label><input type="number" id="fade" min="0" max="3" step="0.5" value="1"></div>
-<div class="col"><label>FPS</label><input type="number" id="fps" min="15" max="60" value="30"></div></div>
+<div class="col"><label>FPS</label><input type="number" id="fps" min="15" max="60" value="30"></div>
+<div class="col"><label>Zoom %</label><input type="number" id="zoom" min="5" max="100" step="5" value="40"></div></div>
 <label class="chk"><input type="checkbox" id="fit" checked> Show whole photo (no cropping)</label>
 <progress id="bar" max="1" value="0"></progress>
 <div class="row"><button class="acc" id="bExport">Export video</button></div>
@@ -83,10 +84,12 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 const $=id=>document.getElementById(id);
 const STYLES=["Zoom In","Zoom Out","Pan Left","Pan Right","Rotate Left","Rotate Right","Random"];
 const SIZES={"1280x720 (landscape)":[1280,720],"1920x1080 (landscape)":[1920,1080],"720x1280 (portrait)":[720,1280],"1080x1920 (portrait)":[1080,1920],"1080x1080 (square)":[1080,1080]};
-const MOTION={"Zoom In":[1,1.25,.5,.5,0,0],"Zoom Out":[1.25,1,.5,.5,0,0],"Pan Left":[1.2,1.2,1,0,0,0],"Pan Right":[1.2,1.2,0,1,0,0],
+const MOTION={"Pan Left":[1.2,1.2,1,0,0,0],"Pan Right":[1.2,1.2,0,1,0,0],
  "Rotate Left":[1.5,1.5,.5,.5,12,-12],"Rotate Right":[1.5,1.5,.5,.5,-12,12]};
 const FAL_MODEL="kling/v4/image-to-video";
 const ease=t=>t*t*(3-2*t);
+const zoomAmt=()=>Math.min(1,Math.max(.05,(+$("zoom").value||40)/100));
+function mot(style){const a=zoomAmt();return style==="Zoom In"?[1,1+a,.5,.5,0,0]:style==="Zoom Out"?[1+a,1,.5,.5,0,0]:MOTION[style]}
 let items=[],sel=-1,uid=0,runId=null,busy=false;
 
 /* ---------- storage ---------- */
@@ -173,7 +176,7 @@ function move(d){const j=sel+d;if(sel<0||j<0||j>=items.length)return;[items[sel]
 function drawCover(ctx,src,style,t,W,H){
   const iw=src.width,ih=src.height;let cw,ch;
   if(iw/ih>W/H){ch=ih;cw=ih*W/H}else{cw=iw;ch=iw*H/W}
-  const [z0,z1,f0,f1,a0,a1]=MOTION[style];
+  const [z0,z1,f0,f1,a0,a1]=mot(style);
   const z=z0+(z1-z0)*t,w=cw/z;
   const cx=(iw-w)*(f0+(f1-f0)*t)+w/2,cy=ih/2,s=W/w,ang=(a0+(a1-a0)*t)*Math.PI/180;
   ctx.save();ctx.translate(W/2,H/2);ctx.rotate(-ang);ctx.scale(s,s);ctx.translate(-cx,-cy);ctx.drawImage(src,0,0);ctx.restore();
@@ -193,7 +196,7 @@ function drawItem(ctx,it,u,W,H,fit){
   const src=it.img,iw=src.width,ih=src.height,k=Math.min(W/iw,H/ih);
   let f,ang=0;
   if(spin){f=.8;const m=MOTION[style];ang=(m[4]+(m[5]-m[4])*t)*Math.PI/180}
-  else f=style==="Zoom Out"?1-.08*t:.92+.08*t;
+  else{const a=zoomAmt();f=style==="Zoom Out"?1+a/2-a*t:1-a/2+a*t}
   ctx.save();ctx.translate(W/2,H/2);ctx.rotate(-ang);ctx.scale(f*k,f*k);ctx.drawImage(src,-iw/2,-ih/2);ctx.restore();
 }
 
@@ -365,7 +368,7 @@ window.__back=()=>{if($("modal").style.display==="flex"){$("modal").style.displa
 /* ---------- init ---------- */
 STYLES.forEach(s=>$("style").add(new Option(s)));$("style").add(new Option("AI Orbit"));
 Object.keys(SIZES).forEach(s=>$("size").add(new Option(s)));
-for(const k of["size","fade","fps"]){const v=store.get(k,null);if(v!==null)$(k).value=v;$(k).onchange=()=>{store.set(k,$(k).value);if(k==="size")showFirst()}}
+for(const k of["size","fade","fps","zoom"]){const v=store.get(k,null);if(v!==null)$(k).value=v;$(k).onchange=()=>{store.set(k,$(k).value);if(k==="size"||k==="zoom")showFirst()}}
 $("fit").checked=store.get("fit","1")==="1";$("fit").onchange=()=>{store.set("fit",$("fit").checked?"1":"0");showFirst()};
 $("style").value="Zoom In";
 $("bAdd").onclick=()=>{if(HAS){say("Opening photo picker...");Native.pickPhotos()}else $("file").click()};
