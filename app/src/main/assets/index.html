@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Photo Motion</title>
+<style>
+:root{--bg:#0d0e14;--panel:#181a25;--field:#232637;--fg:#eceef7;--mut:#8b90a8;--acc:#6c5ce7;--acch:#7d6ff0;--err:#ff6b6b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.35 system-ui,Roboto,sans-serif;padding:0 0 40px}
+header{padding:14px 16px 6px;font-weight:700;font-size:19px}
+.wrap{padding:0 12px;max-width:720px;margin:0 auto}
+canvas#view{width:100%;background:#000;border-radius:10px;display:block;max-height:42vh;object-fit:contain}
+.row{display:flex;gap:8px;margin:8px 0;align-items:center}
+.row>*{flex:1}
+h3{margin:16px 2px 6px;font-size:12px;letter-spacing:.08em;color:var(--mut);font-weight:600}
+button{background:var(--field);color:var(--fg);border:0;border-radius:10px;padding:12px 8px;font-size:15px}
+button:active{filter:brightness(1.3)}
+button.acc{background:var(--acc);font-weight:600}
+button:disabled{opacity:.45}
+select,input[type=text],input[type=password],input[type=number]{width:100%;background:var(--field);color:var(--fg);border:0;border-radius:10px;padding:11px;font-size:15px}
+label{color:var(--mut);font-size:13px;display:block;margin:0 0 3px 2px}
+.col{flex:1;min-width:0}
+#list{background:var(--panel);border-radius:10px;min-height:56px;max-height:230px;overflow:auto}
+.item{display:flex;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid #0d0e14}
+.item.sel{background:var(--acc)}
+.item img{width:48px;height:36px;object-fit:cover;border-radius:5px;background:#000}
+.item .t{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.item small{display:block;color:#c9cce0;opacity:.8}
+.empty{padding:16px;color:var(--mut)}
+progress{width:100%;height:10px;accent-color:var(--acc)}
+#msg{color:var(--mut);min-height:20px;font-size:13px;margin:4px 2px}
+.chk{display:flex;gap:8px;align-items:center;color:var(--fg);margin:10px 2px}
+.chk input{width:20px;height:20px;accent-color:var(--acc)}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9}
+#modal .card{background:var(--panel);width:100%;max-width:560px;border-radius:16px 16px 0 0;padding:16px;max-height:92vh;overflow:auto}
+.note{font-size:12.5px;color:var(--mut);margin:6px 2px}
+.err{color:var(--err)}
+</style></head><body>
+<header>📷 Photo Motion</header>
+<div class="wrap">
+<canvas id="view" width="640" height="360"></canvas>
+<div class="row"><button class="acc" id="bPlay">▶ Play preview</button><button id="bStop">Stop</button></div>
+<div id="msg"></div>
+
+<h3>PHOTOS</h3>
+<div class="row"><button class="acc" id="bAdd">+ Add photos</button><button id="bDel">Remove</button><button id="bUp">↑</button><button id="bDown">↓</button></div>
+<div id="list"><div class="empty">No photos yet. Tap “Add photos”.</div></div>
+
+<h3>SELECTED PHOTO</h3>
+<div class="row"><div class="col"><label>Motion</label><select id="style"></select></div>
+<div class="col"><label>Seconds</label><input type="number" id="secs" min="1" max="30" step="0.5" value="5"></div></div>
+<div class="row"><button class="acc" id="bAI">✨ AI Orbit</button></div>
+<div class="row"><button id="bApply">Apply to selected</button><button id="bApplyAll">Apply to all</button></div>
+
+<h3>VIDEO</h3>
+<div class="row"><div class="col"><label>Size</label><select id="size"></select></div></div>
+<div class="row"><div class="col"><label>Fade (s)</label><input type="number" id="fade" min="0" max="3" step="0.5" value="1"></div>
+<div class="col"><label>FPS</label><input type="number" id="fps" min="15" max="60" value="30"></div></div>
+<label class="chk"><input type="checkbox" id="fit" checked> Show whole photo (no cropping)</label>
+<progress id="bar" max="1" value="0"></progress>
+<div class="row"><button class="acc" id="bExport">Export video</button></div>
+<div class="note">Keep the app open while exporting. The video is saved in your phone's Movies / Photo Motion folder.</div>
+</div>
+
+<div id="modal"><div class="card">
+<div style="font-weight:700;font-size:17px;margin-bottom:8px">✨ AI Orbit</div>
+<div class="note" style="margin-top:0">The AI turns around the object and shows its other sides (made in the cloud by fal.ai, about $0.80 per 5-second clip).</div>
+<label>Orbit around</label><input type="text" id="aiSubject" placeholder="e.g. the cake, the house">
+<div class="row"><div class="col"><label>Direction</label><select id="aiDir"><option>right</option><option>left</option></select></div></div>
+<label>fal.ai key</label><input type="password" id="aiKey" placeholder="xxxxxxxx-xxxx:xxxxxxxx" autocomplete="off">
+<label style="margin-top:8px">Model</label><input type="text" id="aiModel">
+<div id="aiMulti" style="display:none">
+<label class="chk"><input type="checkbox" id="aiAll"> Use all my photos in order (one photo per side)</label>
+<label class="chk"><input type="checkbox" id="aiLoop"> Finish back on the first photo</label></div>
+<div class="note" id="aiCost"></div>
+<progress id="aiBar" max="1" value="0" style="margin-top:8px"></progress>
+<div id="aiMsg" class="note"></div>
+<div class="row"><button id="aiSave">Save</button><button class="acc" id="aiGo">Generate</button><button id="aiClose">Close</button></div>
+</div></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const STYLES=["Zoom In","Zoom Out","Pan Left","Pan Right","Rotate Left","Rotate Right","Random"];
+const SIZES={"1280x720 (landscape)":[1280,720],"1920x1080 (landscape)":[1920,1080],"720x1280 (portrait)":[720,1280],"1080x1920 (portrait)":[1080,1920],"1080x1080 (square)":[1080,1080]};
+const MOTION={"Zoom In":[1,1.25,.5,.5,0,0],"Zoom Out":[1.25,1,.5,.5,0,0],"Pan Left":[1.2,1.2,1,0,0,0],"Pan Right":[1.2,1.2,0,1,0,0],
+ "Rotate Left":[1.5,1.5,.5,.5,12,-12],"Rotate Right":[1.5,1.5,.5,.5,-12,12]};
+const FAL_MODEL="kling/v4/image-to-video";
+const ease=t=>t*t*(3-2*t);
+let items=[],sel=-1,uid=0,runId=null,busy=false;
+
+/* ---------- storage ---------- */
+const store={get(k,d){try{const v=localStorage.getItem("pm_"+k);return v===null?d:v}catch(e){return d}},
+ set(k,v){try{localStorage.setItem("pm_"+k,v);return true}catch(e){return false}}};
+
+/* ---------- native bridge (falls back to fetch in a normal browser) ---------- */
+const pend={};let rid=0;
+const HAS=typeof Native!=="undefined";
+function nreq(method,url,headers,body){
+  if(!HAS)return fetch(url,{method,headers,body:body||undefined}).then(async r=>({code:r.status,text:await r.text()}));
+  return new Promise(res=>{const id="r"+(++rid);pend[id]=res;Native.request(id,method,url,JSON.stringify(headers||{}),body||"")});
+}
+function ndl(url){
+  if(!HAS)return fetch(url).then(r=>r.blob());
+  return new Promise((res,rej)=>{const id="d"+(++rid);pend[id]={parts:[],res,rej};Native.download(id,url)});
+}
+window.__resp=(id,code,text)=>{const p=pend[id];delete pend[id];p({code,text})};
+window.__dl=(id,b)=>{pend[id].parts.push(Uint8Array.from(atob(b),c=>c.charCodeAt(0)))};
+window.__dldone=(id,code)=>{const p=pend[id];delete pend[id];code===200?p.res(new Blob(p.parts,{type:"video/mp4"})):p.rej(new Error("Could not download the AI clip ("+code+")"))};
+function b64(u8){let s="";for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
+async function saveBlob(blob,name){
+  if(!HAS){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();return true}
+  const mime=(blob.type||"video/mp4").split(";")[0];
+  const buf=new Uint8Array(await blob.arrayBuffer());
+  Native.saveBegin(name,mime);
+  for(let i=0;i<buf.length;i+=393216)Native.saveChunk(b64(buf.subarray(i,i+393216)));
+  return Native.saveEnd();
+}
+
+/* ---------- photos ---------- */
+function say(t,err){const m=$("msg");m.textContent=t||"";m.className=err?"err":""}
+async function addFiles(files){
+  say("Loading photos...");
+  for(const f of files){
+    try{
+      const bmp=await createImageBitmap(f);
+      const k=Math.min(1,1600/Math.max(bmp.width,bmp.height));
+      const c=document.createElement("canvas");c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+      c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);bmp.close&&bmp.close();
+      const sm=document.createElement("canvas");sm.width=120;sm.height=Math.max(2,Math.round(120*c.height/c.width));
+      const sx=sm.getContext("2d");sx.drawImage(c,0,0,sm.width,sm.height);
+      const thumb=sm.toDataURL("image/jpeg",.7);
+      sx.fillStyle="rgba(0,0,0,.45)";sx.fillRect(0,0,sm.width,sm.height);
+      items.push({id:++uid,name:f.name||"photo",img:c,bg:sm,thumb,style:pick($("style").value),secs:+$("secs").value||5});
+    }catch(e){say("Could not read "+(f.name||"a photo"),true)}
+  }
+  if(sel<0&&items.length)sel=0;
+  refresh();showFirst();say("");
+}
+function pick(s){return s==="Random"?STYLES[Math.floor(Math.random()*(STYLES.length-1))]:s}
+function refresh(){
+  const L=$("list");L.innerHTML="";
+  if(!items.length){L.innerHTML='<div class="empty">No photos yet. Tap “Add photos”.</div>';return}
+  items.forEach((it,i)=>{
+    const d=document.createElement("div");d.className="item"+(i===sel?" sel":"");
+    d.innerHTML='<img src="'+it.thumb+'"><div class="t">'+esc(it.name)+'<small>'+(it.video?"AI Orbit":it.style)+" · "+it.secs+'s</small></div>';
+    d.onclick=()=>{stop();sel=i;if(it.video){$("style").value="AI Orbit"}else $("style").value=it.style;$("secs").value=it.secs;refresh();showFirst()};
+    L.appendChild(d);
+  });
+}
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function apply(all){
+  const idx=all?items.map((_,i)=>i):(sel>=0?[sel]:[]);
+  if(!idx.length)return say("Add and select a photo first.",true);
+  for(const i of idx){const it=items[i];if(it.video&&$("style").value==="AI Orbit"){it.secs=+$("secs").value||5;continue}
+    dropClip(it);it.style=pick($("style").value==="AI Orbit"?"Zoom In":$("style").value);it.secs=+$("secs").value||5}
+  refresh();showFirst();
+}
+function dropClip(it){if(it.video){it.video.pause();URL.revokeObjectURL(it.clipUrl);it.video=null;it.clipUrl=null}}
+function removeSel(){if(sel<0)return;stop();dropClip(items[sel]);items.splice(sel,1);sel=Math.min(sel,items.length-1);refresh();showFirst()}
+function move(d){const j=sel+d;if(sel<0||j<0||j>=items.length)return;[items[sel],items[j]]=[items[j],items[sel]];sel=j;refresh()}
+
+/* ---------- drawing ---------- */
+function drawCover(ctx,src,style,t,W,H){
+  const iw=src.width,ih=src.height;let cw,ch;
+  if(iw/ih>W/H){ch=ih;cw=ih*W/H}else{cw=iw;ch=iw*H/W}
+  const [z0,z1,f0,f1,a0,a1]=MOTION[style];
+  const z=z0+(z1-z0)*t,w=cw/z;
+  const cx=(iw-w)*(f0+(f1-f0)*t)+w/2,cy=ih/2,s=W/w,ang=(a0+(a1-a0)*t)*Math.PI/180;
+  ctx.save();ctx.translate(W/2,H/2);ctx.rotate(-ang);ctx.scale(s,s);ctx.translate(-cx,-cy);ctx.drawImage(src,0,0);ctx.restore();
+}
+function drawItem(ctx,it,u,W,H,fit){
+  u=Math.min(Math.max(u,0),1);const t=ease(u);
+  if(it.video){
+    const v=it.video,vw=v.videoWidth||16,vh=v.videoHeight||9;
+    const k=fit?Math.min(W/vw,H/vh):Math.max(W/vw,H/vh);
+    ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);
+    ctx.drawImage(v,(W-vw*k)/2,(H-vh*k)/2,vw*k,vh*k);return;
+  }
+  const style=it.style;
+  if(!fit){ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);drawCover(ctx,it.img,style,t,W,H);return}
+  const spin=style.startsWith("Rotate");
+  drawCover(ctx,it.bg,spin?"Zoom In":style,t,W,H);
+  const src=it.img,iw=src.width,ih=src.height,k=Math.min(W/iw,H/ih);
+  let f,ang=0;
+  if(spin){f=.8;const m=MOTION[style];ang=(m[4]+(m[5]-m[4])*t)*Math.PI/180}
+  else f=style==="Zoom Out"?1-.08*t:.92+.08*t;
+  ctx.save();ctx.translate(W/2,H/2);ctx.rotate(-ang);ctx.scale(f*k,f*k);ctx.drawImage(src,-iw/2,-ih/2);ctx.restore();
+}
+
+/* ---------- timeline ---------- */
+function plan(list,fade){
+  const fd=list.length>1?Math.min(fade,Math.min(...list.map(i=>i.secs))):0;
+  let s=0;const starts=list.map(it=>{const a=s;s+=it.secs;return a});
+  return {starts,total:s,fade:fd};
+}
+function frameAt(ctx,list,pl,t,W,H,fit,state){
+  let i=list.length-1;for(let k=0;k<list.length;k++){if(t<pl.starts[k]+list[k].secs){i=k;break}}
+  const len=k=>list[k].secs+(k===list.length-1?0:pl.fade);
+  syncVideos(list,i,pl,t,state);
+  if(i>0&&t<pl.starts[i]+pl.fade){
+    drawItem(ctx,list[i-1],(t-pl.starts[i-1])/len(i-1),W,H,fit);
+    ctx.globalAlpha=(t-pl.starts[i])/pl.fade;
+    drawItem(ctx,list[i],(t-pl.starts[i])/len(i),W,H,fit);ctx.globalAlpha=1;
+  }else drawItem(ctx,list[i],(t-pl.starts[i])/len(i),W,H,fit);
+}
+function syncVideos(list,i,pl,t,state){
+  if(state.cur===i)return;state.cur=i;
+  list.forEach((it,k)=>{if(it.video&&k<i-1)it.video.pause()});
+  const it=list[i];
+  if(it.video){const v=it.video;v.currentTime=0;const d=v.duration||5;
+    v.playbackRate=Math.min(16,Math.max(.0625,d/(it.secs+(i===list.length-1?0:pl.fade))));v.play().catch(()=>{})}
+}
+function stop(){runId=null;items.forEach(it=>it.video&&it.video.pause())}
+function selFit(){return $("fit").checked}
+function psize(){const [W,H]=SIZES[$("size").value];const k=Math.min(1,640/W);return [Math.round(W*k),Math.round(H*k)]}
+function setupView(){const [W,H]=psize(),c=$("view");if(c.width!==W||c.height!==H){c.width=W;c.height=H}return c.getContext("2d")}
+function showFirst(){
+  const ctx=setupView(),[W,H]=psize();ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);
+  const it=items[sel];if(!it)return;
+  try{if(it.video){it.video.currentTime=0;setTimeout(()=>{drawItem(ctx,it,0,W,H,selFit())},150)}else drawItem(ctx,it,0,W,H,selFit())}catch(e){}
+}
+function play(list,ctx,W,H,fit,fade,onFrame){
+  return new Promise(res=>{
+    const pl=plan(list,fade),state={cur:-1},me=runId=Symbol(),t0=performance.now();
+    (function step(){
+      if(runId!==me){res(false);return}
+      const t=(performance.now()-t0)/1000;
+      if(t>=pl.total){frameAt(ctx,list,pl,pl.total-1e-6,W,H,fit,state);onFrame&&onFrame(1);res(true);return}
+      frameAt(ctx,list,pl,t,W,H,fit,state);onFrame&&onFrame(t/pl.total);requestAnimationFrame(step);
+    })();
+  });
+}
+async function preview(){
+  const it=items[sel];if(!it)return say("Select a photo first.",true);
+  stop();const ctx=setupView(),[W,H]=psize();
+  await play([it],ctx,W,H,selFit(),0);
+}
+
+/* ---------- export ---------- */
+async function exportVideo(){
+  if(!items.length)return say("Add some photos first.",true);
+  if(busy)return;busy=true;stop();$("bExport").disabled=true;
+  const [W,H]=SIZES[$("size").value],fps=Math.min(60,Math.max(15,+$("fps").value||30)),fade=+$("fade").value||0;
+  const cv=document.createElement("canvas");cv.width=W;cv.height=H;const ctx=cv.getContext("2d");
+  const types=["video/mp4;codecs=avc1","video/mp4","video/webm;codecs=vp9","video/webm;codecs=vp8","video/webm"];
+  const mime=types.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t));
+  try{
+    if(!mime)throw new Error("This phone cannot record video here.");
+    const stream=cv.captureStream(fps),chunks=[];
+    const rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:W>=1500?10e6:6e6});
+    rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+    const stopped=new Promise(r=>rec.onstop=r);
+    rec.start(500);
+    say("Making video - keep the app open...");
+    const ok=await play(items,ctx,W,H,selFit(),fade,p=>{$("bar").value=p;say("Making video... "+Math.round(p*100)+"%")});
+    await new Promise(r=>setTimeout(r,300));rec.stop();await stopped;
+    if(!ok)throw new Error("Stopped.");
+    const blob=new Blob(chunks,{type:mime.split(";")[0]});
+    const ext=mime.startsWith("video/mp4")?"mp4":"webm";
+    const saved=await saveBlob(blob,"PhotoMotion_"+Date.now()+"."+ext);
+    $("bar").value=1;say(saved?"Done (100%). Saved in Movies / Photo Motion.":"Could not save the video.",!saved);
+    HAS&&saved&&Native.toast("Video saved in Movies / Photo Motion");
+  }catch(e){say(e.message||String(e),true)}
+  busy=false;$("bExport").disabled=false;
+}
+
+/* ---------- AI Orbit (fal.ai) ---------- */
+function orbitPrompt(subject,dir,pair){
+  return pair?`The camera slowly and smoothly orbits to the ${dir} around ${subject}, turning from the first view to the second view. Steady cinematic orbit shot, realistic, consistent lighting; ${subject} keeps its exact shape.`
+   :`The camera slowly and smoothly orbits to the ${dir} around ${subject}, revealing its other sides. Steady cinematic orbit shot, realistic, consistent lighting; ${subject} stays in the centre and keeps its exact shape.`;
+}
+function dataUri(img,W,H){
+  const c=document.createElement("canvas");c.width=W;c.height=H;const x=c.getContext("2d"),k=Math.max(W/img.width,H/img.height);
+  x.drawImage(img,(W-img.width*k)/2,(H-img.height*k)/2,img.width*k,img.height*k);return c.toDataURL("image/jpeg",.92);
+}
+async function fal(method,url,key,body){
+  const r=await nreq(method,url,{"Authorization":"Key "+key,"Content-Type":"application/json"},body?JSON.stringify(body):"");
+  if(r.code===0)throw new Error("No connection to fal.ai: "+r.text);
+  if(r.code===401||r.code===403)throw new Error("fal.ai did not accept your key. Create a key at fal.ai > Dashboard > Keys (it looks like xxxxxxxx-xxxx:xxxxxxxx), paste the whole key, and check the account has credit.");
+  if(r.code>=400)throw new Error("fal.ai error "+r.code+": "+r.text.slice(0,300));
+  return JSON.parse(r.text);
+}
+async function genClip(a,b,subject,dir,key,model,W,H,prog){
+  const nw=model.includes("/v4/");
+  if(b&&!nw)throw new Error("Multi-photo orbit needs a Kling 4 model (kling/v4/image-to-video).");
+  const body={prompt:orbitPrompt(subject,dir,!!b),[nw?"start_image_url":"image_url"]:dataUri(a.img,W,H),duration:nw?5:"5"};
+  if(nw)body.resolution="720p";if(b)body.end_image_url=dataUri(b.img,W,H);
+  prog("Sending photo...",.02);
+  const job=await fal("POST","https://queue.fal.run/"+model,key,body),t0=Date.now();
+  for(;;){
+    const st=await fal("GET",job.status_url,key),s=st.status,el=(Date.now()-t0)/1000;
+    if(s==="COMPLETED")break;
+    if(s!=="IN_QUEUE"&&s!=="IN_PROGRESS")throw new Error("Unexpected status from fal.ai: "+JSON.stringify(st).slice(0,200));
+    if(el>1200)throw new Error("fal.ai took longer than 20 minutes; try again later.");
+    prog((s==="IN_QUEUE"?"Waiting in queue":"Generating")+"... "+Math.round(el)+"s",s==="IN_QUEUE"?.05:.05+.85*Math.min(el/200,1));
+    await new Promise(r=>setTimeout(r,4000));
+  }
+  const res=await fal("GET",job.response_url,key);
+  prog("Downloading clip...",.95);
+  return ndl(res.video.url);
+}
+function attachClip(it,blob){
+  dropClip(it);
+  const v=document.createElement("video");v.muted=true;v.playsInline=true;v.preload="auto";
+  it.clipUrl=URL.createObjectURL(blob);v.src=it.clipUrl;it.video=v;
+  return new Promise(res=>{v.onloadedmetadata=()=>{it.secs=Math.round(Math.max(v.duration,1)*10)/10;res()};v.onerror=()=>res()});
+}
+function openAI(){
+  if(sel<0)return say("Select a photo first.",true);
+  $("aiKey").value=store.get("fal_key","");$("aiModel").value=store.get("fal_model",FAL_MODEL);
+  $("aiSubject").value=store.get("subject","");$("aiDir").value=store.get("direction","right");
+  $("aiMulti").style.display=items.length>1?"block":"none";$("aiAll").checked=false;
+  $("aiBar").value=0;$("aiMsg").textContent="";updCost();$("modal").style.display="flex";
+}
+function updCost(){
+  const n=$("aiAll").checked?items.length-1+($("aiLoop").checked?1:0):1;
+  $("aiCost").textContent=n+" clip"+(n>1?"s":"")+" · about $"+(n*0.8).toFixed(2)+" with the default model.";
+}
+function persistAI(show){
+  const ok=store.set("fal_key",$("aiKey").value.trim().replace(/^["']|["']$/g,""))&store.set("fal_model",$("aiModel").value.trim()||FAL_MODEL)&
+   store.set("subject",$("aiSubject").value.trim())&store.set("direction",$("aiDir").value);
+  if(show)$("aiMsg").textContent=ok?"✓ Saved":"Could not save on this phone.";
+}
+async function aiGo(){
+  if(busy)return;persistAI(false);
+  const key=$("aiKey").value.trim().replace(/^["']|["']$/g,""),model=$("aiModel").value.trim()||FAL_MODEL;
+  const subject=$("aiSubject").value.trim()||"the main subject",dir=$("aiDir").value;
+  if(!key)return $("aiMsg").textContent="Paste your fal.ai key first.";
+  const multi=$("aiAll").checked&&items.length>1;
+  const pairs=multi?items.slice(0,-1).map((a,i)=>[a,items[i+1]]).concat($("aiLoop").checked?[[items[items.length-1],items[0]]]:[]):[[items[sel],null]];
+  busy=true;$("aiGo").disabled=true;$("aiMsg").className="note";
+  const fr=pairs.map(()=>0),first=pairs[0][0],k=Math.min(1,1280/Math.max(first.img.width,first.img.height));
+  const W=Math.round(first.img.width*k),H=Math.round(first.img.height*k);
+  const show=(m,f)=>{const p=fr.reduce((a,b)=>a+b,0)/fr.length;$("aiBar").value=p;$("aiMsg").textContent=m+"  -  "+Math.round(p*100)+"%"};
+  try{
+    const blobs=await Promise.all(pairs.map((p,i)=>genClip(p[0],p[1],subject,dir,key,model,W,H,(m,f)=>{fr[i]=f;show(multi?"Making "+pairs.length+" clips: "+m:m)})));
+    for(let i=0;i<pairs.length;i++){
+      saveBlob(blobs[i],"Orbit_"+Date.now()+"_"+(i+1)+".mp4").catch(()=>{});
+    }
+    if(!multi){await attachClip(pairs[0][0],blobs[0]);pairs[0][0].style="AI Orbit"}
+    else{
+      const at=items.indexOf(items[items.length-1])+1;
+      for(let i=0;i<pairs.length;i++){
+        const it={id:++uid,name:"Orbit "+(i+1),img:pairs[i][0].img,bg:pairs[i][0].bg,thumb:pairs[i][0].thumb,style:"AI Orbit",secs:5};
+        await attachClip(it,blobs[i]);items.splice(at+i,0,it);
+      }
+    }
+    fr.fill(1);show("AI Orbit ready (clips also saved in Movies / Photo Motion)");
+    refresh();showFirst();
+  }catch(e){$("aiMsg").className="note err";$("aiMsg").textContent=e.message||String(e);$("aiBar").value=0}
+  busy=false;$("aiGo").disabled=false;
+}
+window.__back=()=>{if($("modal").style.display==="flex"){$("modal").style.display="none";return true}return false};
+
+/* ---------- init ---------- */
+STYLES.forEach(s=>$("style").add(new Option(s)));$("style").add(new Option("AI Orbit"));
+Object.keys(SIZES).forEach(s=>$("size").add(new Option(s)));
+for(const k of["size","fade","fps"]){const v=store.get(k,null);if(v!==null)$(k).value=v;$(k).onchange=()=>{store.set(k,$(k).value);if(k==="size")showFirst()}}
+$("fit").checked=store.get("fit","1")==="1";$("fit").onchange=()=>{store.set("fit",$("fit").checked?"1":"0");showFirst()};
+$("style").value="Zoom In";
+$("bAdd").onclick=()=>{const i=document.createElement("input");i.type="file";i.accept="image/*";i.multiple=true;i.onchange=()=>addFiles([...i.files]);i.click()};
+$("bDel").onclick=removeSel;$("bUp").onclick=()=>move(-1);$("bDown").onclick=()=>move(1);
+$("bPlay").onclick=preview;$("bStop").onclick=()=>{stop();showFirst()};
+$("bApply").onclick=()=>apply(false);$("bApplyAll").onclick=()=>apply(true);
+$("bExport").onclick=exportVideo;$("bAI").onclick=openAI;
+$("aiClose").onclick=()=>{persistAI(false);$("modal").style.display="none"};
+$("aiSave").onclick=()=>persistAI(true);$("aiGo").onclick=aiGo;
+$("aiAll").onchange=updCost;$("aiLoop").onchange=updCost;
+window.__test={addFiles,get items(){return items},exportVideo,openAI,aiGo,play,preview};
+setupView();
+</script></body></html>

@@ -1,0 +1,20 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'au.rhccity.photomotion'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'au.rhccity.photomotion'
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+    signingConfigs {
+        keep { storeFile file('../photomotion.keystore'); storePassword 'photomotion'; keyAlias 'photomotion'; keyPassword 'photomotion' }
+    }
+    buildTypes {
+        release { signingConfig signingConfigs.keep; minifyEnabled false }
+        debug { signingConfig signingConfigs.keep }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
