@@ -49,7 +49,7 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 <h3>SELECTED PHOTO</h3>
 <div class="row"><div class="col"><label>Motion</label><select id="style"></select></div>
 <div class="col"><label>Seconds</label><input type="number" id="secs" min="1" max="30" step="0.5" value="5"></div></div>
-<div class="row"><button class="acc" id="bAI">✨ AI Orbit</button></div>
+<div class="row"><button class="acc" id="bAI">✨ AI Orbit</button><button id="bKey" style="flex:0 0 auto;padding:12px 16px">⚙ AI key</button></div>
 <div class="row"><button id="bApply">Apply to selected</button><button id="bApplyAll">Apply to all</button></div>
 
 <h3>VIDEO</h3>
@@ -307,7 +307,6 @@ function attachClip(it,blob){
   return new Promise(res=>{v.onloadedmetadata=()=>{it.secs=Math.round(Math.max(v.duration,1)*10)/10;res()};v.onerror=()=>res()});
 }
 function openAI(){
-  if(sel<0)return say("Select a photo first.",true);
   $("aiKey").value=store.get("fal_key","");$("aiModel").value=store.get("fal_model",FAL_MODEL);
   $("aiSubject").value=store.get("subject","");$("aiDir").value=store.get("direction","right");
   $("aiMulti").style.display=items.length>1?"block":"none";$("aiAll").checked=false;
@@ -327,6 +326,7 @@ async function aiGo(){
   const key=$("aiKey").value.trim().replace(/^["']|["']$/g,""),model=$("aiModel").value.trim()||FAL_MODEL;
   const subject=$("aiSubject").value.trim()||"the main subject",dir=$("aiDir").value;
   if(!key)return $("aiMsg").textContent="Paste your fal.ai key first.";
+  if(sel<0)return $("aiMsg").textContent="Your key is saved. Close this window, select a photo, then press AI Orbit.";
   const multi=$("aiAll").checked&&items.length>1;
   const pairs=multi?items.slice(0,-1).map((a,i)=>[a,items[i+1]]).concat($("aiLoop").checked?[[items[items.length-1],items[0]]]:[]):[[items[sel],null]];
   busy=true;$("aiGo").disabled=true;$("aiMsg").className="note";
@@ -364,7 +364,7 @@ $("file").onchange=()=>{const f=[...$("file").files];$("file").value="";if(f.len
 $("bDel").onclick=removeSel;$("bUp").onclick=()=>move(-1);$("bDown").onclick=()=>move(1);
 $("bPlay").onclick=preview;$("bStop").onclick=()=>{stop();showFirst()};
 $("bApply").onclick=()=>apply(false);$("bApplyAll").onclick=()=>apply(true);
-$("bExport").onclick=exportVideo;$("bAI").onclick=openAI;
+$("bExport").onclick=exportVideo;$("bAI").onclick=openAI;$("bKey").onclick=openAI;
 $("aiClose").onclick=()=>{persistAI(false);$("modal").style.display="none"};
 $("aiSave").onclick=()=>persistAI(true);$("aiGo").onclick=aiGo;
 $("aiAll").onchange=updCost;$("aiLoop").onchange=updCost;
