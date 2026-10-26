@@ -119,23 +119,32 @@ async function saveBlob(blob,name){
 
 /* ---------- photos ---------- */
 function say(t,err){const m=$("msg");m.textContent=t||"";m.className=err?"err":""}
+async function decode(f){
+  try{return await createImageBitmap(f)}catch(e){}
+  const url=URL.createObjectURL(f),im=new Image();
+  try{im.src=url;await im.decode();return im}finally{setTimeout(()=>URL.revokeObjectURL(url),10000)}
+}
 async function addFiles(files){
-  say("Loading photos...");
+  say("Loading "+files.length+" photo(s)...");
+  let added=0,fail="";
   for(const f of files){
     try{
-      const bmp=await createImageBitmap(f);
-      const k=Math.min(1,1600/Math.max(bmp.width,bmp.height));
-      const c=document.createElement("canvas");c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+      const bmp=await decode(f),bw=bmp.naturalWidth||bmp.width,bh=bmp.naturalHeight||bmp.height;
+      if(!bw||!bh)throw new Error("empty image");
+      const k=Math.min(1,1600/Math.max(bw,bh));
+      const c=document.createElement("canvas");c.width=Math.max(2,Math.round(bw*k));c.height=Math.max(2,Math.round(bh*k));
       c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);bmp.close&&bmp.close();
       const sm=document.createElement("canvas");sm.width=120;sm.height=Math.max(2,Math.round(120*c.height/c.width));
       const sx=sm.getContext("2d");sx.drawImage(c,0,0,sm.width,sm.height);
       const thumb=sm.toDataURL("image/jpeg",.7);
       sx.fillStyle="rgba(0,0,0,.45)";sx.fillRect(0,0,sm.width,sm.height);
       items.push({id:++uid,name:f.name||"photo",img:c,bg:sm,thumb,style:pick($("style").value),secs:+$("secs").value||5});
-    }catch(e){say("Could not read "+(f.name||"a photo"),true)}
+      added++;
+    }catch(e){fail="Could not read "+(f.name||"a photo")+": "+(e&&e.message||e)}
   }
   if(sel<0&&items.length)sel=0;
-  refresh();showFirst();say("");
+  refresh();showFirst();
+  say(fail||("Added "+added+" photo(s)."),!!fail);
 }
 function pick(s){return s==="Random"?STYLES[Math.floor(Math.random()*(STYLES.length-1))]:s}
 function refresh(){
@@ -360,7 +369,7 @@ for(const k of["size","fade","fps"]){const v=store.get(k,null);if(v!==null)$(k).
 $("fit").checked=store.get("fit","1")==="1";$("fit").onchange=()=>{store.set("fit",$("fit").checked?"1":"0");showFirst()};
 $("style").value="Zoom In";
 $("bAdd").onclick=()=>$("file").click();
-$("file").onchange=()=>{const f=[...$("file").files];$("file").value="";if(f.length)addFiles(f)};
+$("file").onchange=async()=>{const f=[...$("file").files];if(!f.length)return say("No photo was received from the picker.",true);await addFiles(f);$("file").value=""};
 $("bDel").onclick=removeSel;$("bUp").onclick=()=>move(-1);$("bDown").onclick=()=>move(1);
 $("bPlay").onclick=preview;$("bStop").onclick=()=>{stop();showFirst()};
 $("bApply").onclick=()=>apply(false);$("bApplyAll").onclick=()=>apply(true);
