@@ -84,12 +84,12 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 const $=id=>document.getElementById(id);
 const STYLES=["Zoom In","Zoom Out","Pan Left","Pan Right","Rotate Left","Rotate Right","Random"];
 const SIZES={"1280x720 (landscape)":[1280,720],"1920x1080 (landscape)":[1920,1080],"720x1280 (portrait)":[720,1280],"1080x1920 (portrait)":[1080,1920],"1080x1080 (square)":[1080,1080]};
-const MOTION={"Pan Left":[1.2,1.2,1,0,0,0],"Pan Right":[1.2,1.2,0,1,0,0],
+const MOTION={
  "Rotate Left":[1.5,1.5,.5,.5,12,-12],"Rotate Right":[1.5,1.5,.5,.5,-12,12]};
 const FAL_MODEL="kling/v4/image-to-video";
 const ease=t=>t*t*(3-2*t);
 const zoomAmt=()=>Math.min(2,Math.max(.05,(+$("zoom").value||80)/100));
-function mot(style){const a=zoomAmt();return style==="Zoom In"?[1,1+a,.5,.5,0,0]:style==="Zoom Out"?[1+a,1,.5,.5,0,0]:MOTION[style]}
+function mot(style){const a=zoomAmt();return style==="Zoom In"?[1,1+a,.5,.5,0,0]:style==="Zoom Out"?[1+a,1,.5,.5,0,0]:style==="Pan Left"?[1+Math.max(a,.3),1+Math.max(a,.3),1,0,0,0]:style==="Pan Right"?[1+Math.max(a,.3),1+Math.max(a,.3),0,1,0,0]:MOTION[style]}
 let items=[],sel=-1,uid=0,runId=null,busy=false;
 
 /* ---------- storage ---------- */
@@ -190,15 +190,14 @@ function drawItem(ctx,it,u,W,H,fit){
     ctx.drawImage(v,(W-vw*k)/2,(H-vh*k)/2,vw*k,vh*k);return;
   }
   const style=it.style;
-  if(!fit){ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);drawCover(ctx,it.img,style,t,W,H);return}
+  if(!fit||style.startsWith("Pan")){ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);drawCover(ctx,it.img,style,t,W,H);return}
   const spin=style.startsWith("Rotate");
   drawCover(ctx,it.bg,spin?"Zoom In":style,t,W,H);
   const src=it.img,iw=src.width,ih=src.height,k=Math.min(W/iw,H/ih);
-  let f,ang=0,ox=0;
-  if(style.startsWith("Pan")){f=Math.min(1,.76*W/(iw*k));ox=(W-iw*k*f)/2*(style==="Pan Left"?2*t-1:1-2*t)}
-  else if(spin){f=.8;const m=MOTION[style];ang=(m[4]+(m[5]-m[4])*t)*Math.PI/180}
+  let f,ang=0;
+  if(spin){f=.8;const m=MOTION[style];ang=(m[4]+(m[5]-m[4])*t)*Math.PI/180}
   else{const a=zoomAmt();f=style==="Zoom Out"?1+a/2-a*t:1-a/2+a*t}
-  ctx.save();ctx.translate(W/2+ox,H/2);ctx.rotate(-ang);ctx.scale(f*k,f*k);ctx.drawImage(src,-iw/2,-ih/2);ctx.restore();
+  ctx.save();ctx.translate(W/2,H/2);ctx.rotate(-ang);ctx.scale(f*k,f*k);ctx.drawImage(src,-iw/2,-ih/2);ctx.restore();
 }
 
 /* ---------- timeline ---------- */
