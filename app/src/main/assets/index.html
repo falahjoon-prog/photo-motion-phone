@@ -194,10 +194,11 @@ function drawItem(ctx,it,u,W,H,fit){
   const spin=style.startsWith("Rotate");
   drawCover(ctx,it.bg,spin?"Zoom In":style,t,W,H);
   const src=it.img,iw=src.width,ih=src.height,k=Math.min(W/iw,H/ih);
-  let f,ang=0;
-  if(spin){f=.8;const m=MOTION[style];ang=(m[4]+(m[5]-m[4])*t)*Math.PI/180}
+  let f,ang=0,ox=0;
+  if(style.startsWith("Pan")){f=.7;ox=(W-iw*k*f)/2*(style==="Pan Left"?2*t-1:1-2*t)}
+  else if(spin){f=.8;const m=MOTION[style];ang=(m[4]+(m[5]-m[4])*t)*Math.PI/180}
   else{const a=zoomAmt();f=style==="Zoom Out"?1+a/2-a*t:1-a/2+a*t}
-  ctx.save();ctx.translate(W/2,H/2);ctx.rotate(-ang);ctx.scale(f*k,f*k);ctx.drawImage(src,-iw/2,-ih/2);ctx.restore();
+  ctx.save();ctx.translate(W/2+ox,H/2);ctx.rotate(-ang);ctx.scale(f*k,f*k);ctx.drawImage(src,-iw/2,-ih/2);ctx.restore();
 }
 
 /* ---------- timeline ---------- */
